@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Extrator de Infrações</title>
+<style>
+:root{
+  --bg:#f6f7f9;--panel:#fff;--text:#1b1f24;--muted:#5f6b7a;--line:#dfe3e8;--accent:#1f6feb;--accent-ink:#fff;
+  --warn:#b54708;--bad:#c62828;--ok:#1a7f37;--row:#fafbfc;
+  --c1:#7c4dff;--c2:#1f9d8f;--c3:#e07a1f;--c4:#d6336c;--l2:#5f6b7a;--ev:#c62828;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0f1216;--panel:#171b21;--text:#e6e9ee;--muted:#98a2b3;--line:#2a313b;--accent:#4c8dff;--accent-ink:#0b0d10;
+  --warn:#f5a524;--bad:#ff6b6b;--ok:#4cc38a;--row:#1b2028;
+  --c1:#a78bfa;--c2:#34d3c0;--c3:#f5a524;--c4:#f472b6;--l2:#98a2b3;--ev:#ff6b6b;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{padding:16px 20px;border-bottom:1px solid var(--line);background:var(--panel);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+h1{font-size:18px;margin:0}
+h2{font-size:15px;margin:0 0 10px}
+.sub{color:var(--muted);font-size:12px}
+main{padding:16px 20px;max-width:1600px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+.tl .dot{border:2px solid var(--panel);z-index:2}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:8px 12px;border-radius:8px;font:inherit;cursor:pointer}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+#drop{border:2px dashed var(--line);border-radius:10px;padding:22px;text-align:center;color:var(--muted)}
+#drop.over{border-color:var(--accent);color:var(--accent)}
+label.chk{display:inline-flex;gap:6px;align-items:center;color:var(--muted);font-size:13px}
+#log{font:12px/1.4 ui-monospace,Consolas,monospace;color:var(--muted);max-height:120px;overflow:auto;white-space:pre-wrap;margin-top:8px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{border:1px solid var(--line);border-radius:8px;padding:10px}
+.kpi b{display:block;font-size:20px}
+.kpi span{color:var(--muted);font-size:12px}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right}
+th{position:sticky;top:0;background:var(--panel);font-weight:600;color:var(--muted);z-index:1}
+td.l,th.l{text-align:left}
+tbody tr:nth-child(even){background:var(--row)}
+tbody tr:hover{outline:1px solid var(--accent)}
+tfoot td{font-weight:600;background:var(--panel)}
+.bad{color:var(--bad);font-weight:600}.warn{color:var(--warn)}
+.tl{position:relative;height:22px;min-width:260px;background:transparent}
+.tl .bar{position:absolute;top:5px;height:12px;border-radius:3px;opacity:.85}
+.tl .tick{position:absolute;top:1px;width:2px;height:20px}
+.tl .dot{position:absolute;top:6px;width:10px;height:10px;border-radius:50%;margin-left:-5px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin:8px 0}
+.legend i{display:inline-block;width:12px;height:10px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.events{display:grid;gap:12px}
+.ev{border:1px solid var(--line);border-radius:8px;padding:10px}
+.ev .meta{font-size:12px;color:var(--muted);margin-bottom:8px;word-break:break-all}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{width:220px;cursor:zoom-in}
+.thumb img{width:100%;border-radius:6px;border:1px solid var(--line);display:block}
+.thumb div{font-size:11.5px;color:var(--muted);margin-top:3px}
+#lb{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:8px;z-index:9;padding:16px}
+#lb img{max-width:96vw;max-height:86vh}
+#lb div{color:#ddd;font-size:13px;text-align:center}
+.hidden{display:none}
+@media (max-width:640px){header,main{padding:12px 16px}.thumb{width:calc(50% - 4px)}}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Extrator de Infrações</h1>
+    <div class="sub">Extrai as imagens base64 dos JSON de infração e analisa os tempos de captura. Tudo roda localmente no navegador.</div>
+  </div>
+  <div class="row">
+    <button id="btnSave" class="primary" disabled title="Disponível ao abrir a pasta pelo botão 'Abrir pasta' (Chrome/Edge)">Salvar imagens na pasta</button>
+    <button id="btnZip" disabled>Baixar ZIP</button>
+    <button id="btnCsv" disabled>Baixar CSV de tempos</button>
+  </div>
+</header>
+
+<main>
+  <section class="card">
+    <div class="row" style="margin-bottom:10px">
+      <button id="btnDir" class="primary">Abrir pasta…</button>
+      <label class="btn">Selecionar pasta (modo compatível)<input id="inDir" type="file" webkitdirectory multiple class="hidden"></label>
+      <label class="btn">Selecionar arquivos JSON<input id="inFiles" type="file" accept=".json" multiple class="hidden"></label>
+      <button id="btnClear">Limpar</button>
+      <label class="chk"><input type="checkbox" id="chkOver"> Sobrescrever imagens existentes</label>
+    </div>
+    <div id="drop">Ou arraste aqui a pasta (ex.: <b>20261006</b>) ou os arquivos .json</div>
+    <div id="log"></div>
+  </section>
+
+  <section class="card hidden" id="secSummary">
+    <h2>Resumo</h2>
+    <div class="kpis" id="kpis"></div>
+  </section>
+
+  <section class="card hidden" id="secTable">
+    <h2>Linha do tempo por evento <span class="sub">(ms relativos à entrada no laço 1; sem laço, relativos ao eventAt)</span></h2>
+    <div class="legend" id="legend"></div>
+    <div class="tablewrap"><table id="tbl"></table></div>
+  </section>
+
+  <section class="card hidden" id="secImgs">
+    <h2>Imagens</h2>
+    <div class="events" id="events"></div>
+  </section>
+</main>
+
+<div id="lb"><img alt=""><div></div></div>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const state={events:[],roots:[]};
+const log=m=>{const el=$('#log');el.textContent+=m+'\n';el.scrollTop=el.scrollHeight;};
+
+/* ---------- utilidades ---------- */
+function ts(s){
+  if(!s) return null;
+  const m=String(s).match(/^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)?$/);
+  if(!m) return null;
+  const base=Date.parse(m[1]+(m[3]||''));
+  const frac=((m[2]||'')+'0000000').slice(0,7);
+  return base+parseInt(frac,10)/1e4;
+}
+const slug=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'');
+const fmt=v=>v==null||isNaN(v)?'—':Math.round(v);
+const hhmmss=t=>{const d=new Date(t);return d.toLocaleTimeString('pt-BR',{hour12:false})+'.'+String(d.getMilliseconds()).padStart(3,'0');};
+function b64bytes(b64){const bin=atob(b64);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u;}
+function median(a){const s=[...a].sort((x,y)=>x-y);const n=s.length;return n? (n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2):null;}
+function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);}
+
+/* ---------- leitura ---------- */
+async function addJson(file,rel,dirHandle){
+  let d;
+  try{d=JSON.parse(await file.text());}catch(e){log('✗ JSON inválido: '+rel);return;}
+  if(!Array.isArray(d.images)){log('· sem "images": '+rel);return;}
+  if(state.events.some(e=>e.rel===rel)) return;
+  const stem=file.name.replace(/\.json$/i,'');
+  const relDir=rel.includes('/')?rel.slice(0,rel.lastIndexOf('/')+1):'';
+  const images=[];
+  d.images.forEach((im,i)=>{
+    if(!im||!im.base64){images.push({i,err:im&&im.error||'sem base64',role:im&&im.role,sourceName:im&&im.sourceName});return;}
+    const ct=im.contentType||'image/jpeg';
+    const ext=ct.includes('jpeg')||ct.includes('jpg')?'jpg':(ct.split('/')[1]||'bin');
+    let bytes;
+    try{bytes=b64bytes(im.base64.replace(/^data:[^,]+,/,''));}catch(e){images.push({i,err:'base64 inválido'});return;}
+    const blob=new Blob([bytes],{type:ct});
+    images.push({i,bytes,blob,url:URL.createObjectURL(blob),
+      name:`${stem}_${i+1}_${slug(im.role)}_${slug(im.sourceName)}.${ext}`,
+      role:im.role,source:im.source,sourceName:im.sourceName,capturedAt:im.capturedAt,
+      elapsedMs:im.elapsedMs,sizeBytes:im.sizeBytes,sizeOk:im.sizeBytes==null||im.sizeBytes===bytes.length});
+    delete im.base64;
+  });
+  state.events.push({rel,relDir,stem,dir:dirHandle||null,d,images,t:timeline(d,images)});
+}
+
+function timeline(d,images){
+  const ls=d.loopSequence||{};
+  const ev=ts(d.eventAt), l1=ts(ls.loop1EnteredAt), l1o=ts(ls.loop1ExitedAt), l2=ts(ls.loop2EnteredAt);
+  const base=l1??ev;
+  const r=x=>x==null||base==null?null:x-base;
+  const imgs=images.map(im=>{
+    const end=r(ts(im.capturedAt));
+    const start=end!=null&&im.elapsedMs!=null?end-im.elapsedMs:null;
+    return {start,end,elapsed:im.elapsedMs,role:im.role,src:im.source,srcName:im.sourceName};
+  });
+  return {base:l1!=null?'L1':'eventAt',evAbs:ev,l1o:r(l1o),l2:r(l2),ev:r(ev),created:r(ts(d.createdAt)),red:d.millisecondsAfterRed,imgs};
+}
+
+async function walkHandle(dir,path){
+  for await(const [name,h] of dir.entries()){
+    if(h.kind==='directory') await walkHandle(h,path+name+'/');
+    else if(/\.json$/i.test(name)) await addJson(await h.getFile(),path+name,dir);
+  }
+}
+async function walkEntry(entry,path){
+  if(entry.isFile){
+    if(/\.json$/i.test(entry.name)){const f=await new Promise((res,rej)=>entry.file(res,rej));await addJson(f,path+entry.name,null);}
+  }else if(entry.isDirectory){
+    const rd=entry.createReader();
+    let batch;
+    do{batch=await new Promise((res,rej)=>rd.readEntries(res,rej));for(const e of batch) await walkEntry(e,path+entry.name+'/');}while(batch.length);
+  }
+}
+
+async function load(fn){
+  const n0=state.events.length;
+  $('#log').textContent='';log('Lendo…');
+  try{await fn();}catch(e){if(e.name!=='AbortError')log('✗ '+e.message);}
+  state.events.sort((a,b)=>(a.t.evAbs??0)-(b.t.evAbs??0)||a.rel.localeCompare(b.rel));
+  const nImg=state.events.reduce((s,e)=>s+e.images.filter(i=>i.blob).length,0);
+  log(`✓ ${state.events.length-n0} JSON novos · total ${state.events.length} eventos, ${nImg} imagens`);
+  render();
+}
+
+/* ---------- entrada ---------- */
+$('#btnDir').onclick=()=>{
+  if(!window.showDirectoryPicker){alert('Este navegador não suporta abrir pasta com gravação. Use Chrome ou Edge, ou o modo compatível (só ZIP).');return;}
+  load(async()=>{
+    const h=await window.showDirectoryPicker({mode:'readwrite'});
+    state.roots.push(h);
+    await walkHandle(h,h.name+'/');
+  });
+};
+$('#inDir').onchange=e=>{const fs=[...e.target.files];e.target.value='';load(async()=>{for(const f of fs) if(/\.json$/i.test(f.name)) await addJson(f,f.webkitRelativePath||f.name,null);});};
+$('#inFiles').onchange=e=>{const fs=[...e.target.files];e.target.value='';load(async()=>{for(const f of fs) await addJson(f,f.name,null);});};
+const drop=$('#drop');
+['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,()=>drop.classList.remove('over')));
+drop.addEventListener('drop',e=>{
+  e.preventDefault();
+  const items=[...e.dataTransfer.items].filter(i=>i.kind==='file');
+  const handleP=items.map(i=>i.getAsFileSystemHandle?i.getAsFileSystemHandle():null);
+  const entries=items.map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry());
+  load(async()=>{
+    const handles=await Promise.all(handleP);
+    for(let k=0;k<items.length;k++){
+      const h=handles[k];
+      if(h&&h.kind==='directory'){state.roots.push(h);await walkHandle(h,h.name+'/');}
+      else if(h&&h.kind==='file'){if(/\.json$/i.test(h.name)) await addJson(await h.getFile(),h.name,null);}
+      else if(entries[k]) await walkEntry(entries[k],'');
+    }
+  });
+});
+$('#btnClear').onclick=()=>{state.events.forEach(e=>e.images.forEach(i=>i.url&&URL.revokeObjectURL(i.url)));state.events=[];state.roots=[];$('#log').textContent='';render();};
+
+/* ---------- saída ---------- */
+$('#btnSave').onclick=async()=>{
+  for(const r of state.roots){
+    if(await r.queryPermission({mode:'readwrite'})!=='granted' && await r.requestPermission({mode:'readwrite'})!=='granted'){log('✗ Permissão de gravação negada para '+r.name);return;}
+  }
+  const over=$('#chkOver').checked;let ok=0,skip=0,fail=0;
+  log('Salvando…');
+  for(const ev of state.events){
+    if(!ev.dir) continue;
+    for(const im of ev.images){
+      if(!im.blob) continue;
+      try{
+        if(!over){try{await ev.dir.getFileHandle(im.name);skip++;continue;}catch(_){}}
+        const fh=await ev.dir.getFileHandle(im.name,{create:true});
+        const w=await fh.createWritable();await w.write(im.blob);await w.close();ok++;
+      }catch(e){fail++;log('✗ '+im.name+': '+e.message);}
+    }
+  }
+  log(`✓ Salvas ${ok} · já existiam ${skip} · falhas ${fail}`);
+};
+
+$('#btnZip').onclick=()=>{
+  const files=[];
+  state.events.forEach(ev=>ev.images.forEach(im=>im.bytes&&files.push({name:ev.relDir+im.name,data:im.bytes})));
+  files.push({name:'tempos_captura.csv',data:new TextEncoder().encode(csvText())});
+  download(makeZip(files),'imagens_infracoes.zip');
+  log(`✓ ZIP com ${files.length-1} imagens + CSV`);
+};
+$('#btnCsv').onclick=()=>download(new Blob([csvText()],{type:'text/csv;charset=utf-8'}),'tempos_captura.csv');
+
+function csvText(){
+  const maxImg=Math.max(0,...state.events.map(e=>e.images.length));
+  const h=['arquivo','sequencia','eventAt','tipo','faixa','idx','velocidade','comprimento','ms_apos_vermelho','base','L1_saida','L2_entrada','eventAt_rel','createdAt_rel','L1_L2','L2_evento'];
+  for(let i=1;i<=maxImg;i++) h.push(`img${i}_role`,`img${i}_origem`,`img${i}_inicio`,`img${i}_fim`,`img${i}_elapsedMs`);
+  h.push('evCGI_fim_menos_evento','avisos');
+  const q=v=>{v=v==null?'':String(v);return /[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  const rows=[h.join(';')];
+  for(const e of state.events){
+    const d=e.d,t=e.t;
+    const r=[e.rel,d.sequence,d.eventAt,d.infractionType,d.laneId,d.index,d.speed,d.length,d.millisecondsAfterRed,t.base,fmt(t.l1o),fmt(t.l2),fmt(t.ev),fmt(t.created),fmt(t.l2),t.l2!=null&&t.ev!=null?fmt(t.ev-t.l2):''];
+    for(let i=0;i<maxImg;i++){const x=t.imgs[i];r.push(x?x.role:'',x?x.srcName:'',x?fmt(x.start):'',x?fmt(x.end):'',x&&x.elapsed!=null?x.elapsed:'');}
+    const evc=evCgi(e);r.push(evc&&evc.end!=null&&t.ev!=null?fmt(evc.end-t.ev):'');
+    r.push((d.warnings||[]).join(' | '));
+    rows.push(r.map(v=>q(v==='—'?'':v)).join(';'));
+  }
+  return '\ufeff'+rows.join('\r\n');
+}
+const evCgi=e=>e.t.imgs.find(x=>x.role==='Evento'&&x.elapsed!=null);
+const preCgi=e=>e.t.imgs.find(x=>x.role==='PreEvento');
+const equip=e=>e.t.imgs.find(x=>x.src===1);
+
+/* ---------- ZIP (store, sem compressão) ---------- */
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function makeZip(files){
+  const enc=new TextEncoder(),parts=[],cen=[];let off=0;
+  const now=new Date();
+  const dt=((now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1))&0xFFFF;
+  const dd=(((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate())&0xFFFF;
+  for(const f of files){
+    const nm=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);lh.setUint16(8,0,true);
+    lh.setUint16(10,dt,true);lh.setUint16(12,dd,true);lh.setUint32(14,crc,true);lh.setUint32(18,sz,true);lh.setUint32(22,sz,true);
+    lh.setUint16(26,nm.length,true);lh.setUint16(28,0,true);
+    parts.push(lh,nm,f.data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);
+    ch.setUint16(12,dt,true);ch.setUint16(14,dd,true);ch.setUint32(16,crc,true);ch.setUint32(20,sz,true);ch.setUint32(24,sz,true);
+    ch.setUint16(28,nm.length,true);ch.setUint32(42,off,true);
+    cen.push(ch,nm);
+    off+=30+nm.length+sz;
+  }
+  const cdSize=cen.reduce((s,p)=>s+p.byteLength,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cdSize,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,e],{type:'application/zip'});
+}
+
+/* ---------- renderização ---------- */
+const COLORS=['var(--c1)','var(--c2)','var(--c3)','var(--c4)'];
+function render(){
+  const evs=state.events,has=evs.length>0;
+  ['#secSummary','#secTable','#secImgs'].forEach(s=>$(s).classList.toggle('hidden',!has));
+  $('#btnZip').disabled=$('#btnCsv').disabled=!has;
+  $('#btnSave').disabled=!evs.some(e=>e.dir);
+  if(!has) return;
+  renderKpis(evs);renderTable(evs);renderImgs(evs);
+}
+function stat(vals){vals=vals.filter(v=>v!=null&&!isNaN(v));return vals.length?{min:Math.min(...vals),med:median(vals),max:Math.max(...vals)}:null;}
+function renderKpis(evs){
+  const nImg=evs.reduce((s,e)=>s+e.images.filter(i=>i.blob).length,0);
+  const nErr=evs.reduce((s,e)=>s+e.images.filter(i=>!i.blob||!i.sizeOk).length,0);
+  const k=[
+    ['Eventos',evs.length],['Imagens extraídas',nImg],['Imagens c/ erro',nErr],
+    ['CGI elapsedMs (mediana)',stat(evs.flatMap(e=>e.t.imgs.map(x=>x.elapsed)))],
+    ['L2 → eventAt (mediana)',stat(evs.map(e=>e.t.l2!=null&&e.t.ev!=null?e.t.ev-e.t.l2:null))],
+    ['eventAt → fim Evento CGI',stat(evs.map(e=>{const x=evCgi(e);return x&&e.t.ev!=null?x.end-e.t.ev:null;}))],
+    ['L1 → fim Evento CGI',stat(evs.map(e=>e.t.base==='L1'?evCgi(e)?.end:null))],
+  ];
+  $('#kpis').innerHTML=k.map(([l,v])=>{
+    if(v&&typeof v==='object') return `<div class="kpi"><b>${fmt(v.med)} ms</b><span>${l}<br>mín ${fmt(v.min)} · máx ${fmt(v.max)}</span></div>`;
+    return `<div class="kpi"><b>${v??'—'}</b><span>${l}</span></div>`;
+  }).join('');
+}
+function renderTable(evs){
+  const maxT=Math.ceil(Math.max(1000,...evs.flatMap(e=>[e.t.ev,e.t.l2,...e.t.imgs.map(x=>x.end)]).filter(v=>v!=null))/250)*250;
+  const pct=v=>Math.max(0,Math.min(100,v/maxT*100));
+  const names=[...new Set(evs.flatMap(e=>e.t.imgs.map((x,i)=>i+'|'+x.role+' · '+x.srcName)))].sort();
+  $('#legend').innerHTML=`<span><i style="background:var(--l2);width:3px"></i>Entrada L2</span><span><i style="background:var(--ev);width:3px"></i>eventAt</span>`+
+    names.map(n=>{const i=+n.split('|')[0];return `<span><i style="background:${COLORS[i%4]}"></i>img${i+1}: ${n.split('|')[1]}</span>`;}).join('')+
+    `<span>barra = início→fim da requisição (capturedAt − elapsedMs → capturedAt); ponto = só capturedAt · escala 0–${maxT} ms</span>`;
+  const cols=['Seq','Hora','Tipo','Faixa','Vel','L1→L2','L2→Ev','L1→Ev','Pré ini','Pré fim','Pré ms','Ev ini','Ev fim','Ev ms','Equip','Ev→fim Ev CGI','Linha do tempo','Avisos'];
+  const rows=evs.map(e=>{
+    const t=e.t,p=preCgi(e),c=evCgi(e),q=equip(e);
+    const evToEnd=c&&t.ev!=null?c.end-t.ev:null;
+    const tl=`<div class="tl">`+
+      t.imgs.map((x,i)=>x.start!=null?`<div class="bar" style="left:${pct(x.start)}%;width:${pct(x.end)-pct(x.start)}%;background:${COLORS[i%4]}" title="img${i+1} ${x.role}/${x.srcName}: ${fmt(x.start)}→${fmt(x.end)} ms"></div>`:
+        x.end!=null?`<div class="dot" style="left:${pct(x.end)}%;background:${COLORS[i%4]}" title="img${i+1} ${x.role}/${x.srcName}: ${fmt(x.end)} ms"></div>`:'').join('')+
+      (t.l2!=null?`<div class="tick" style="left:${pct(t.l2)}%;background:var(--l2)" title="L2 ${fmt(t.l2)} ms"></div>`:'')+
+      (t.ev!=null?`<div class="tick" style="left:${pct(t.ev)}%;background:var(--ev)" title="eventAt ${fmt(t.ev)} ms"></div>`:'')+`</div>`;
+    const w=(e.d.warnings||[]).join(' | ');
+    return `<tr title="${e.rel}"><td>${e.d.sequence??''}</td><td class="l">${t.evAbs?hhmmss(t.evAbs):''}</td><td>${e.d.infractionType??''}</td><td>${e.d.laneId??''}</td><td>${e.d.speed??''}</td>
+      <td>${fmt(t.l2)}</td><td>${t.l2!=null&&t.ev!=null?fmt(t.ev-t.l2):'—'}</td><td class="${t.ev>800?'warn':''}">${fmt(t.ev)}</td>
+      <td>${fmt(p?.start)}</td><td>${fmt(p?.end)}</td><td>${p?.elapsed??'—'}</td>
+      <td>${fmt(c?.start)}</td><td class="${c?.end>1500?'warn':''}">${fmt(c?.end)}</td><td>${c?.elapsed??'—'}</td>
+      <td>${fmt(q?.end)}</td><td class="${evToEnd>1000?'bad':''}">${fmt(evToEnd)}</td><td>${tl}</td><td class="l sub" title="${w}">${w.length>50?w.slice(0,50)+'…':w}</td></tr>`;
+  }).join('');
+  const sel=[e=>e.t.l2,e=>e.t.l2!=null&&e.t.ev!=null?e.t.ev-e.t.l2:null,e=>e.t.ev,e=>preCgi(e)?.start,e=>preCgi(e)?.end,e=>preCgi(e)?.elapsed,e=>evCgi(e)?.start,e=>evCgi(e)?.end,e=>evCgi(e)?.elapsed,e=>equip(e)?.end,e=>{const c=evCgi(e);return c&&e.t.ev!=null?c.end-e.t.ev:null;}];
+  const foot=['min','med','max'].map(k=>`<tr><td colspan="5" class="l">${{min:'Mínimo',med:'Mediana',max:'Máximo'}[k]}</td>`+sel.map(f=>{const s=stat(evs.map(f));return `<td>${s?fmt(s[k]):'—'}</td>`;}).join('')+`<td colspan="2"></td></tr>`).join('');
+  $('#tbl').innerHTML=`<thead><tr>${cols.map((c,i)=>`<th class="${i===1||i>=16?'l':''}">${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody><tfoot>${foot}</tfoot>`;
+}
+function renderImgs(evs){
+  $('#events').innerHTML=evs.map((e,ei)=>`<div class="ev"><div class="meta"><b>Seq ${e.d.sequence??'?'}</b> · ${e.d.infractionTypeName||e.d.infractionType||''} · ${e.d.eventAt||''} · ${e.rel}</div>
+    <div class="thumbs">${e.images.map((im,ii)=>im.url?`<div class="thumb" data-e="${ei}" data-i="${ii}"><img loading="lazy" src="${im.url}" alt=""><div>${ii+1}. ${im.role} · ${im.sourceName}${im.elapsedMs!=null?' · '+im.elapsedMs+' ms':''}${im.sizeOk?'':' · <span class="bad">tamanho difere</span>'}</div></div>`:
+      `<div class="thumb"><div class="bad">${ii+1}. ${im.role||''} · erro: ${im.err}</div></div>`).join('')}</div></div>`).join('');
+}
+$('#events').addEventListener('click',ev=>{
+  const th=ev.target.closest('.thumb[data-e]');if(!th) return;
+  const e=state.events[+th.dataset.e],im=e.images[+th.dataset.i],x=e.t.imgs[+th.dataset.i];
+  $('#lb img').src=im.url;
+  $('#lb div').textContent=`${im.name}\n${im.role} · ${im.sourceName} · capturedAt ${im.capturedAt||'—'} · elapsedMs ${im.elapsedMs??'—'} · fim ${fmt(x.end)} ms após ${e.t.base}`;
+  $('#lb').style.display='flex';
+});
+$('#lb').onclick=()=>{$('#lb').style.display='none';};
+document.addEventListener('keydown',e=>{if(e.key==='Escape')$('#lb').style.display='none';});
+</script>
+</body>
+</html>
